@@ -1,5 +1,5 @@
-const CACHE = 'nss-v4';
-const SHELL = ['./', 'index.html', 'styles.css?v=1.2', 'app.js?v=1.2', 'manifest.webmanifest',
+const CACHE = 'nss-v5';
+const SHELL = ['./', 'index.html', 'styles.css?v=1.3', 'app.js?v=1.3', 'features.js?v=1.3', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

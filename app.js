@@ -2,7 +2,7 @@
 /* NSs Adventures — семейный счётчик калорий. Всё хранится на устройстве (localStorage). */
 
 const KEY = 'nss-adventures-v1';
-const VERSION = '1.2';
+const VERSION = '1.3';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r0 = n => Math.round(+n || 0);
@@ -61,7 +61,7 @@ const RAINBOW = [['red', '#FF5E5E', 'Красный'], ['orange', '#FFA94D', 'О
 /* ---------- состояние ---------- */
 function fresh() {
   return {
-    v: 1, activeId: null, profiles: [], days: {}, weights: {}, coach: {},
+    v: 1, activeId: null, profiles: [], days: {}, weights: {}, coach: {}, shop: [], plan: null, reports: {}, products: {},
     settings: { apiKey: '', model: 'gemini-flash-latest', endpoint: 'https://generativelanguage.googleapis.com', voice: true },
     reminders: [
       { id: 'r1', e: '🌅', t: 'Завтрак — сфоткай тарелку', times: ['08:30'], days: [1, 2, 3, 4, 5, 6, 0], on: true },
@@ -282,7 +282,9 @@ async function geminiCall(model, body, schema) {
   if (!txt) { const e = new Error('Пустой ответ ИИ'); e.retry = true; throw e; }
   return schema ? JSON.parse(txt) : txt.trim();
 }
+const DEMO = new Map(); // схема → тестовый ответ (заполняет features.js)
 function demoAnswer(schema) {
+  if (DEMO.has(schema)) return new Promise(r => setTimeout(() => r(structuredClone(DEMO.get(schema))), 900));
   return new Promise(r => setTimeout(() => r(schema ? {
     dish: 'Курица с рисом и салатом', isFood: true, healthScore: 8, colors: ['red', 'green', 'white'],
     tip: 'Отличный баланс! Добавь ещё горсть зелени — и будет идеально.',
@@ -421,6 +423,7 @@ function todayHtml() {
     h += `<div class="card"><div class="row between"><h3>🗺️ Квесты дня</h3><span class="pill">+25 XP</span></div>
       ${todaysQuests(p.id).map(q => `<div class="quest"><div class="check ${d.quests.includes(q.id) ? 'done' : ''}">${d.quests.includes(q.id) ? '✓' : ''}</div><div>${q.t}</div></div>`).join('')}</div>`;
   }
+  if (typeof kitchenToday === 'function') h += kitchenToday(p);
   h += `<h2>Дневник</h2><div class="card">`;
   if (!d.meals.length) h += `<div class="empty">Пока пусто. Нажми 📸 внизу и сфотографируй тарелку</div>`;
   for (const [k, v] of Object.entries(MEALS)) {
@@ -456,9 +459,14 @@ function fastingCard(p) {
 function snapHtml() {
   return `${header('Что на тарелке?')}<div class="hero"><button class="camcircle" data-action="cam">📸</button>
     <h1>Сфоткай тарелку</h1><div class="sub">ИИ определит блюда, вес порций и калории</div></div>
+    <button class="opt" data-action="scan"><div class="e">▥</div><div><b>Сканировать штрихкод</b><div class="muted">Точные КБЖУ с упаковки</div></div></button>
     <button class="opt" data-action="gal"><div class="e">🖼️</div><div><b>Из галереи</b><div class="muted">Выбрать готовое фото</div></div></button>
     <button class="opt" data-action="text-food"><div class="e">✍️</div><div><b>Описать словами</b><div class="muted">«Тарелка борща и 2 куска хлеба»</div></div></button>
     <button class="opt" data-action="manual-food"><div class="e">🔢</div><div><b>Ввести вручную</b><div class="muted">Если знаешь калории с упаковки</div></div></button>
+    <h2>Кухня</h2>
+    <button class="opt" data-action="cook"><div class="e">👩‍🍳</div><div><b>Что приготовить?</b><div class="muted">Сфоткай холодильник — ИИ подберёт рецепты</div></div></button>
+    <button class="opt" data-action="plan"><div class="e">🗓️</div><div><b>Меню на неделю</b><div class="muted">${S.plan ? 'Открыть текущее меню' : 'Для всей семьи под цели каждого'}</div></div></button>
+    <button class="opt" data-action="shop"><div class="e">🛒</div><div><b>Список покупок</b><div class="muted">${S.shop.filter(s => !s.done).length ? 'Осталось купить: ' + S.shop.filter(s => !s.done).length : 'Пока пусто'}</div></div></button>
     <div class="muted" style="text-align:center;margin-top:14px">Совет: снимай сверху, при дневном свете, вилка рядом помогает оценить размер</div>`;
 }
 
@@ -505,7 +513,9 @@ function progressHtml() {
         ${xy.map(a => `<circle cx="${a[0]}" cy="${a[1]}" r="3.5" fill="#FFB547"/>`).join('')}
         <defs><linearGradient id="wg"><stop offset="0" stop-color="#FFB547"/><stop offset="1" stop-color="#FF5E7E"/></linearGradient></defs></svg>`;
     } else h += `<div class="muted">Текущий вес: ${p.weight} кг. Записывай вес раз в неделю — появится график.</div>`;
+    if (typeof forecastHtml === 'function') h += forecastHtml(p);
     h += `</div>`;
+    if (typeof reportCard === 'function') h += reportCard(p);
   }
   p.ach ??= [];
   h += `<h2>Достижения <span class="muted">${p.ach.length}/${ACH.length}</span></h2><div class="ach">${ACH.map(a => `<div class="${p.ach.includes(a.id) ? 'on' : ''}"><span>${a.e}</span>${a.n}</div>`).join('')}</div>`;
@@ -549,12 +559,13 @@ function profileForm(p = {}) {
     <label class="f"><span>Рост, см</span><input id="pf-h" type="number" inputmode="numeric" value="${p.height || ''}" placeholder="170"></label>
     <label class="f"><span>Вес, кг</span><input id="pf-w" type="number" inputmode="decimal" step="0.1" value="${p.weight || ''}" placeholder="65"></label></div>
     <label class="f"><span>Активность</span><select id="pf-act">${ACTIVITY.map(a => `<option value="${a.v}" ${(p.activity || 1.375) == a.v ? 'selected' : ''}>${a.n}</option>`).join('')}</select></label>
+    <label class="f"><span>Желаемый вес, кг (необязательно)</span><input id="pf-tw" type="number" inputmode="decimal" step="0.1" value="${p.targetWeight || ''}" placeholder="для прогноза"></label>
     <label class="f"><span>Цель</span><select id="pf-goal">${Object.entries(GOALS).map(([k, g]) => `<option value="${k}" ${(p.goal || 'lose') === k ? 'selected' : ''}>${g.e} ${g.n}</option>`).join('')}</select></label>`;
 }
 function readProfile(base = {}) {
   const v = id => $('#' + id).value.trim();
   const p = { ...base, emoji: $('#pf-emoji .on')?.dataset.v || '🦊', name: v('pf-name'), sex: v('pf-sex'), age: +v('pf-age'), height: +v('pf-h'),
-    weight: +v('pf-w').replace(',', '.'), activity: +v('pf-act'), goal: v('pf-goal') };
+    weight: +v('pf-w').replace(',', '.'), activity: +v('pf-act'), goal: v('pf-goal'), targetWeight: +v('pf-tw').replace(',', '.') || null };
   if (!p.name) return toast('Введи имя'), null;
   if (!(p.age > 2 && p.age < 110 && p.height > 60 && p.height < 250 && p.weight > 10 && p.weight < 350)) return toast('Проверь возраст, рост и вес'), null;
   return p;

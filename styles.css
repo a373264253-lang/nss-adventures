@@ -174,3 +174,18 @@ h3{margin:0 0 6px;font-size:17px}
 .empty{text-align:center;padding:18px;color:var(--tx3)}
 hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 a{color:var(--amber)}
+
+/* v1.3: сканер, рецепты, покупки, прогноз */
+.scanbox{position:relative;border-radius:22px;overflow:hidden;background:#000;aspect-ratio:4/3;margin:12px 0}
+.scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+.scanline{position:absolute;left:12%;right:12%;height:2px;background:var(--coral);box-shadow:0 0 14px var(--coral);animation:sl 1.6s ease-in-out infinite alternate}
+@keyframes sl{from{top:28%}to{top:72%}}
+details.rc summary{list-style:none;cursor:pointer}
+details.rc summary::-webkit-details-marker{display:none}
+details.rc .arr{transition:transform .2s}
+details.rc[open] .arr{transform:rotate(180deg)}
+.shop-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);width:100%}
+.shop-row.done span{text-decoration:line-through;color:var(--tx3)}
+.fc{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.fc b{font-size:15px}
+.opt .e{flex:none}
