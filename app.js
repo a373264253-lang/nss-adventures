@@ -244,14 +244,41 @@ async function gemini(parts, schema) {
   const st = S.settings;
   if (!st.apiKey) throw new Error('NOKEY');
   if (st.apiKey.trim().toLowerCase() === 'demo') return demoAnswer(schema);
-  const url = `${st.endpoint.replace(/\/$/, '')}/v1beta/models/${encodeURIComponent(st.model)}:generateContent`;
   const body = { contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.2 } };
   if (schema) { body.generationConfig.responseMimeType = 'application/json'; body.generationConfig.responseSchema = schema; }
+  // Модели по очереди: последняя удачная → выбранная → запасные. При перегрузке — повтор, потом следующая модель.
+  const models = [...new Set([st.lastOk, st.model, ...FALLBACK_MODELS].filter(Boolean))];
+  let lastErr;
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const out = await geminiCall(model, body, schema);
+        if (st.lastOk !== model) { st.lastOk = model; save(); }
+        return out;
+      } catch (e) {
+        lastErr = e;
+        if (e.fatal) throw e;               // неверный ключ / регион — менять модель бессмысленно
+        if (!e.retry) break;                // модели нет или ошибка запроса — сразу следующая
+        await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+const FALLBACK_MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+async function geminiCall(model, body, schema) {
+  const st = S.settings;
+  const url = `${st.endpoint.replace(/\/$/, '')}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': st.apiKey.trim() }, body: JSON.stringify(body) });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j.error?.message || 'HTTP ' + res.status);
+  if (!res.ok) {
+    const e = new Error(j.error?.message || 'HTTP ' + res.status);
+    e.fatal = res.status === 400 && /API key|location|region/i.test(e.message) || res.status === 403;
+    e.retry = [429, 500, 502, 503, 504].includes(res.status);
+    throw e;
+  }
   const txt = (j.candidates?.[0]?.content?.parts || []).filter(x => !x.thought).map(x => x.text || '').join('');
-  if (!txt) throw new Error('Пустой ответ ИИ');
+  if (!txt) { const e = new Error('Пустой ответ ИИ'); e.retry = true; throw e; }
   return schema ? JSON.parse(txt) : txt.trim();
 }
 function demoAnswer(schema) {
@@ -268,6 +295,7 @@ function aiError(e) {
   let m = e.message || String(e);
   if (/location is not supported|not supported for the API/i.test(m)) m = 'Gemini недоступен из этого региона. Включи VPN или укажи прокси в настройках ИИ.';
   else if (/API key not valid|API_KEY_INVALID/i.test(m)) m = 'Ключ Gemini не подходит — проверь его в настройках.';
+  else if (/high demand|overloaded|UNAVAILABLE|503/i.test(m)) m = 'Серверы Gemini сейчас перегружены (это у Google, не у тебя). Я попробовал все запасные модели — подожди минуту и повтори.';
   else if (/quota|exhausted|429/i.test(m)) m = 'Бесплатный лимит Gemini на сегодня/минуту исчерпан. Попробуй чуть позже.';
   else if (/Failed to fetch|NetworkError|Load failed/i.test(m)) m = 'Нет связи с Gemini. Проверь интернет/VPN.';
   sheet(`<h3>Не получилось 😕</h3><p class="sub">${esc(m)}</p><button class="btn block" data-action="close-sheet">Понятно</button>`);

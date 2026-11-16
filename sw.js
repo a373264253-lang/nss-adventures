@@ -1,4 +1,4 @@
-const CACHE = 'nss-v2';
+const CACHE = 'nss-v3';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
