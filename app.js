@@ -2,6 +2,7 @@
 /* NSs Adventures — семейный счётчик калорий. Всё хранится на устройстве (localStorage). */
 
 const KEY = 'nss-adventures-v1';
+const VERSION = '1.2';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r0 = n => Math.round(+n || 0);
@@ -534,7 +535,7 @@ function moreHtml() {
     <button class="opt" data-action="settings"><div class="e">🤖</div><div class="grow"><b>ИИ (Gemini)</b><div class="muted">${S.settings.apiKey ? 'Ключ добавлен ✓' : 'Добавь бесплатный ключ'}</div></div></button>
     <button class="opt" data-action="backup"><div class="e">💾</div><div class="grow"><b>Резервная копия</b><div class="muted">Сохранить или перенести на другой телефон</div></div></button>
     <button class="opt" data-action="install"><div class="e">📲</div><div class="grow"><b>Установить на iPhone</b><div class="muted">Как добавить на экран «Домой»</div></div></button>
-    <div class="muted" style="text-align:center;margin:20px 0">NSs Adventures · данные хранятся только на этом телефоне<br>Оценки ИИ приблизительные и не заменяют врача</div>`;
+    <div class="muted" style="text-align:center;margin:20px 0">NSs Adventures ${VERSION} · данные хранятся только на этом телефоне<br>Оценки ИИ приблизительные и не заменяют врача</div>`;
   return h;
 }
 
@@ -706,6 +707,7 @@ function openSettings() {
     <label class="f"><span>Модель</span><input id="st-model" value="${esc(s.model)}" autocapitalize="off" spellcheck="false"></label>
     <label class="f"><span>Адрес API (можно указать свой прокси)</span><input id="st-ep" value="${esc(s.endpoint)}" autocapitalize="off" spellcheck="false"></label>
     <div class="muted" style="margin-bottom:12px">Если Gemini пишет «регион не поддерживается» — нужен VPN. Для пробы без ключа введи <b>demo</b>.</div>
+    <div class="muted" style="margin-bottom:10px">Версия приложения ${VERSION}</div>
     <div class="grid2"><button class="btn" data-action="test-ai">Проверить</button><button class="btn primary" data-action="save-settings">Сохранить</button></div>`);
 }
 function saveSettingsFromForm() {
@@ -836,7 +838,12 @@ $('#imp').addEventListener('change', async e => {
 });
 
 /* ---------- старт ---------- */
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+if ('serviceWorker' in navigator) {
+  const hadSW = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => { });
+  // пришла новая версия — один раз перезагружаемся, чтобы сразу её показать
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW && !sessionStorage.nssReloaded) { sessionStorage.nssReloaded = 1; location.reload(); } });
+}
 render();
 setInterval(() => { checkReminders(); if (tab === 'today' && P()?.fast && !$('.sheet')) render(); }, 30000);
 checkReminders();
