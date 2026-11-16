@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>NSs Adventures</title>
+<meta name="description" content="Семейный счётчик калорий по фото, тренировки, напоминания и режимы">
+<meta name="theme-color" content="#0B0F1A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NSs">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app"></div>
+<nav id="tabbar">
+  <button data-tab="today" class="tab"><span class="ti">◉</span><span>Сегодня</span></button>
+  <button data-tab="train" class="tab"><span class="ti">⚡</span><span>Движение</span></button>
+  <button data-tab="snap" class="tab snapbtn" aria-label="Сфотографировать еду"><span class="snapcore">📸</span></button>
+  <button data-tab="progress" class="tab"><span class="ti">▲</span><span>Прогресс</span></button>
+  <button data-tab="more" class="tab"><span class="ti">✦</span><span>Режимы</span></button>
+</nav>
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+<input type="file" id="gal" accept="image/*" hidden>
+<input type="file" id="imp" accept="application/json,.json" hidden>
+<script src="app.js"></script>
+</body>
+</html>
