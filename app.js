@@ -2,7 +2,7 @@
 /* NSs Adventures — семейный счётчик калорий. Всё хранится на устройстве (localStorage). */
 
 const KEY = 'nss-adventures-v1';
-const VERSION = '1.3';
+const VERSION = '1.4';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r0 = n => Math.round(+n || 0);

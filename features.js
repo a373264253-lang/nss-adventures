@@ -198,8 +198,10 @@ function openPlan() {
   sheet(`<div class="row between"><h3>🗓️ Меню на неделю</h3><button class="btn sm" data-action="shop">🛒 Покупки (${S.shop.filter(s => !s.done).length})</button></div>
     ${i0 > 6 ? `<div class="card"><b>Неделя закончилась</b><div class="muted">Составим новое меню?</div><button class="btn primary sm" style="margin-top:8px" data-action="plan-new">Новое меню</button></div>` : ''}
     <div class="seg" style="margin:12px 0">${S.plan.days.map((_, i) => { const dk = addDays(S.plan.start, i); return `<button class="${i === planDay ? 'on' : ''}" data-action="plan-day" data-v="${i}">${i === i0 ? '•' : ''}${WDS[new Date(dk + 'T12:00').getDay()]}</button>`; }).join('')}</div>
-    <div class="card">${d ? d.meals.map((m, mi) => `<div class="meal"><div class="thumb">${MEALS[m.type]?.split(' ')[0] || '🍽️'}</div><div class="grow"><b>${esc(m.name)}</b>
+    ${d && !kid && Math.abs(sum - targets(P()).kcal) > targets(P()).kcal * 0.15 ? `<div class="card"><div class="sub">⚠️ В этом дне ${r0(sum)} ккал при норме ${targets(P()).kcal}. Нажми на блюдо и замени его кнопкой 🔄.</div></div>` : ''}
+    <div class="card">${d ? d.meals.map((m, mi) => `<div class="meal"><div class="thumb">${MEALS[m.type]?.split(' ')[0] || '🍽️'}</div><div class="grow" role="button" style="cursor:pointer" data-action="plan-meal" data-d="${planDay}" data-m="${mi}"><b>${esc(m.name)}</b>
       <div class="muted">${MEALS[m.type]?.split(' ')[1] || ''}${kid ? '' : ` · ${r0(m.kcal)} ккал · Б${r0(m.protein)} Ж${r0(m.fat)} У${r0(m.carbs)}`}</div></div>
+      <div class="muted" style="margin-top:2px;color:var(--amber)">📖 рецепт · 🔄 замена</div></div>
       <button class="btn sm" data-action="plan-eat" data-d="${planDay}" data-m="${mi}">${isEaten(planDay, mi) ? '✓' : 'Съел'}</button></div>`).join('') : '<div class="empty">Нет данных</div>'}
       ${kid ? '' : `<div class="muted" style="margin-top:8px">Итого за день: ${r0(sum)} ккал (норма ${targets(P()).kcal})</div>`}</div>
     ${S.plan.tip ? `<div class="card"><div class="sub">💡 ${esc(S.plan.tip)}</div></div>` : ''}
@@ -217,26 +219,65 @@ async function planGo(prefs) {
   const p = P(), t = targets(p);
   sheet(`<h3>Составляю меню…</h3><div class="row"><span class="spin"></span><span class="sub">Планирую 7 дней и список покупок. Это займёт до минуты.</span></div>`);
   const prompt = `Ты — диетолог семьи. Составь меню на 7 дней, начиная с сегодняшнего дня (${WDS[new Date().getDay()]}). Простая домашняя еда из обычного российского магазина, повторяй ингредиенты между днями, чтобы покупок было меньше. В каждом дне: breakfast, lunch, dinner, snack.
-Калории и БЖУ указывай для порции человека: ${p.name}, цель «${isKid(p) ? 'здоровое питание ребёнка' : GOALS[p.goal].n}», норма ${t.kcal} ккал (Б${t.protein}/Ж${t.fat}/У${t.carbs}); сумма за день ≈ норме.
+Калории и БЖУ указывай для порции человека: ${p.name}, цель «${isKid(p) ? 'здоровое питание ребёнка' : GOALS[p.goal].n}», норма ${t.kcal} ккал (Б${t.protein}/Ж${t.fat}/У${t.carbs}); сумма калорий за день — в пределах ±5% от нормы, белок не меньше ${t.protein} г.
+${['lose', 'cut'].includes(p.goal) && !isKid(p) ? 'Цель — похудение без голода: много белка и клетчатки, овощи в каждом обеде и ужине, сложные углеводы утром и днём, лёгкий ужин, перекусы до 200 ккал, без сладких напитков и выпечки. Порции сытные за счёт овощей.' : ''}
+Не повторяй одно блюдо чаще 2 раз за неделю. Используй готовку впрок: то, что приготовлено на ужин, может пойти в обед следующего дня.
 Семья, для которой готовим: ${familyLine()}.
 ${prefs ? 'Пожелания: ' + prefs : ''}
-shopping — общий список покупок на неделю на всю семью с количеством (например «1,5 кг», «10 шт»), сгруппируй по категориям. tip — один совет по готовке впрок (до 25 слов). Всё по-русски.`;
+shopping — общий список покупок на неделю на всю семью. КАЖДЫЙ продукт строго ОДИН раз (сложи количество за всю неделю), название — коротко, в именительном падеже, без уточнений в скобках («Куриное филе», «Яйца», «Помидоры»). Количество только в единицах кг, г, л, мл или шт (например «1,5 кг», «10 шт»). Соль, специи и воду не включай. tip — один совет по готовке впрок (до 25 слов). Всё по-русски.`;
   try {
     const r = await gemini([{ text: prompt }], PLAN_SCHEMA);
     S.plan = { start: dkey(), days: (r.days || []).slice(0, 7), tip: r.tip, prefs, eaten: [] };
+    S.shop = S.shop.filter(s => s.done || !s.plan); // некупленное из старого меню больше не нужно
     addShop((r.shopping || []).map(s => ({ ...s })), true);
     planDay = 0; save(); toast('Меню готово! 🎉'); addXP(20, 'Меню на неделю'); openPlan(); render();
   } catch (e) { aiError(e); }
 }
+/* Один продукт — одна строка: «Филе куриное» = «Куриное филе», «Яйцо» = «Яйца», «Томаты» = «Помидоры». */
+const SHOP_SYN = [[/(томат|помидор)\S*/g, 'помид'], [/(картош|картоф)\S*/g, 'картоф'], [/кур(иц|ин|ят)\S*/g, 'кур'], [/говя\S*/g, 'говяд'], [/свин\S*/g, 'свин'],
+  [/огур\S*/g, 'огур'], [/морко\S*/g, 'морк'], [/(зелен|укроп|петрушк)\S*/g, 'зелен'], [/(^|\s)(свеж|охлажд|замор|репчат|отборн)\S*/g, ' ']];
+function shopKey(name) {
+  let s = String(name).toLowerCase().replace(/ё/g, 'е').replace(/\(.*?\)/g, ' ').replace(/[^а-яa-z\s]/g, ' ');
+  for (const [re, to] of SHOP_SYN) s = s.replace(re, to);
+  if (/яйц|яиц/.test(s)) return 'яйц';
+  return s.split(/\s+/).filter(w => w.length > 1).map(w => w.slice(0, 5)).sort().join(' ');
+}
+function parseQty(q) {
+  const m = String(q || '').replace(',', '.').match(/^\s*~?(\d+(?:\.\d+)?)\s*(кг|гр|г|л|мл|шт)?\.?\s*$/i);
+  if (!m) return null;
+  let n = +m[1], u = (m[2] || 'шт').toLowerCase();
+  if (u === 'кг') { n *= 1000; u = 'г'; } if (u === 'гр') u = 'г'; if (u === 'л') { n *= 1000; u = 'мл'; }
+  return { n, u };
+}
+function fmtQty({ n, u }) {
+  const f = x => String(Math.round(x * 100) / 100).replace('.', ',');
+  if (u === 'г') return n >= 1000 ? f(n / 1000) + ' кг' : f(n) + ' г';
+  if (u === 'мл') return n >= 1000 ? f(n / 1000) + ' л' : f(n) + ' мл';
+  return f(n) + ' шт';
+}
+function mergeQty(a, b) {
+  if (!a) return b || ''; if (!b) return a;
+  const pa = parseQty(a), pb = parseQty(b);
+  if (pa && pb && pa.u === pb.u) return fmtQty({ n: pa.n + pb.n, u: pa.u });
+  return a.includes(b) ? a : a + ' + ' + b;
+}
 function addShop(items, fromPlan) {
   let n = 0;
   items.forEach(it => {
-    const name = String(it.name || '').trim(); if (!name) return;
-    const ex = S.shop.find(s => !s.done && s.name.toLowerCase() === name.toLowerCase());
-    if (ex) { if (it.qty && !ex.qty.includes(it.qty)) ex.qty = ex.qty ? ex.qty + ' + ' + it.qty : it.qty; return; }
-    S.shop.push({ id: uid(), name, qty: it.qty || '', cat: SHOP_CATS.includes(it.cat) ? it.cat : 'Другое', done: false, plan: !!fromPlan }); n++;
+    const name = String(it.name || '').replace(/\s*\(.*?\)\s*/g, ' ').trim(); if (!name) return;
+    const key = shopKey(name), cat = SHOP_CATS.includes(it.cat) ? it.cat : 'Другое';
+    const ex = S.shop.find(s => !s.done && shopKey(s.name) === key);
+    if (ex) { ex.qty = mergeQty(ex.qty, it.qty || ''); if (ex.cat === 'Другое' && cat !== 'Другое') ex.cat = cat; if (fromPlan) ex.plan = true; return; }
+    S.shop.push({ id: uid(), name: name[0].toUpperCase() + name.slice(1), qty: it.qty || '', cat, done: false, plan: !!fromPlan }); n++;
   });
   save(); return n;
+}
+function dedupeShop() {
+  const old = S.shop || []; if (!old.length) return;
+  S.shop = old.filter(s => s.done);
+  addShop(old.filter(s => !s.done).map(s => ({ name: s.name, qty: s.qty, cat: s.cat })), false);
+  old.filter(s => !s.done && s.plan).forEach(s => { const x = S.shop.find(y => !y.done && shopKey(y.name) === shopKey(s.name)); if (x) x.plan = true; });
+  save();
 }
 function openShop() {
   const left = S.shop.filter(s => !s.done).length;
@@ -255,6 +296,46 @@ function shareShop() {
   const text = '🛒 Покупки (NSs Adventures)\n\n' + groups.map(([c, items]) => c + ':\n' + items.map(s => `• ${s.name}${s.qty ? ' — ' + s.qty : ''}`).join('\n')).join('\n\n');
   if (navigator.share) navigator.share({ text }).catch(() => { });
   else navigator.clipboard?.writeText(text).then(() => toast('Список скопирован'));
+}
+const MEAL_SCHEMA = { type: 'OBJECT', properties: { type: { type: 'STRING', enum: Object.keys(MEALS) }, name: { type: 'STRING' }, kcal: { type: 'NUMBER' }, protein: { type: 'NUMBER' }, fat: { type: 'NUMBER' }, carbs: { type: 'NUMBER' } },
+  required: ['type', 'name', 'kcal', 'protein', 'fat', 'carbs'] };
+const MEAL_RECIPE_SCHEMA = { type: 'OBJECT', properties: { minutes: { type: 'INTEGER' }, servings: { type: 'INTEGER' },
+  ingredients: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, qty: { type: 'STRING' }, cat: { type: 'STRING', enum: SHOP_CATS } }, required: ['name', 'qty', 'cat'] } },
+  steps: { type: 'ARRAY', items: { type: 'STRING' } }, tip: { type: 'STRING' } }, required: ['minutes', 'servings', 'ingredients', 'steps', 'tip'] };
+function openPlanMeal(d, mi) {
+  const m = S.plan.days[d].meals[mi], kid = isKid(P());
+  sheet(`<div class="muted">${MEALS[m.type] || ''} · ${WDS[new Date(addDays(S.plan.start, d) + 'T12:00').getDay()]}</div><h3 style="font-size:21px;margin:4px 0 8px">${esc(m.name)}</h3>
+    ${kid ? '' : `<div class="macrorow" style="margin:0 0 12px"><div><div class="k">Калории</div><div class="v">${r0(m.kcal)}</div></div><div><div class="k">Белки</div><div class="v" style="color:var(--blue)">${r0(m.protein)} г</div></div>
+      <div><div class="k">Жиры / Углев.</div><div class="v">${r0(m.fat)} / ${r0(m.carbs)} г</div></div></div>`}
+    <div id="pm-body">${m.recipe ? recipeBody(m.recipe) : ''}</div>
+    <div class="grid2" style="margin-top:12px">${m.recipe ? `<button class="btn" data-action="pm-shop" data-d="${d}" data-m="${mi}">🛒 В покупки</button>` : `<button class="btn primary" data-action="pm-recipe" data-d="${d}" data-m="${mi}">📖 Рецепт</button>`}
+      <button class="btn" data-action="pm-swap" data-d="${d}" data-m="${mi}">🔄 Заменить</button></div>
+    <button class="btn block ${isEaten(d, mi) ? '' : 'primary'}" style="margin-top:8px" data-action="plan-eat" data-d="${d}" data-m="${mi}">${isEaten(d, mi) ? '✓ Уже съедено' : '🍽️ Съел(а)'}</button>
+    <button class="btn block" style="margin-top:8px" data-action="plan">← К меню</button>`);
+}
+function recipeBody(r) {
+  return `<div class="card"><div class="muted">⏱ ${r.minutes} мин · ${r.servings} порц.</div><div class="mtype">Ингредиенты</div>
+    ${r.ingredients.map(i => `<div class="row between" style="padding:3px 0"><span>${esc(i.name)}</span><span class="muted">${esc(i.qty)}</span></div>`).join('')}
+    <div class="mtype">Как готовить</div><ol style="margin:6px 0 4px;padding-left:20px">${r.steps.map(s => `<li style="margin:5px 0">${esc(s)}</li>`).join('')}</ol>
+    ${r.tip ? `<div class="sub" style="margin-top:8px">💡 ${esc(r.tip)}</div>` : ''}</div>`;
+}
+async function planMealRecipe(d, mi) {
+  const m = S.plan.days[d].meals[mi], body = $('#pm-body');
+  if (body) body.innerHTML = '<div class="row"><span class="spin"></span><span class="sub">Пишу рецепт…</span></div>';
+  try {
+    const r = await gemini([{ text: `Напиши простой домашний рецепт блюда «${m.name}» (${r0(m.kcal)} ккал на порцию, Б${r0(m.protein)}/Ж${r0(m.fat)}/У${r0(m.carbs)}). Семья: ${familyLine()}. servings — на сколько порций (на всю семью). Ингредиенты — из обычного российского магазина, количество на все порции в кг, г, л, мл или шт; cat — отдел магазина. steps — 4–8 коротких шагов. tip — как сделать сытнее без лишних калорий (до 20 слов). По-русски.` }], MEAL_RECIPE_SCHEMA);
+    m.recipe = r; save(); openPlanMeal(d, mi);
+  } catch (e) { aiError(e); }
+}
+async function planMealSwap(d, mi) {
+  const m = S.plan.days[d].meals[mi], p = P(), all = S.plan.days.flatMap(x => x.meals.map(y => y.name));
+  sheet(`<h3>Подбираю замену…</h3><div class="row"><span class="spin"></span><span class="sub">Вместо «${esc(m.name)}» ~${r0(m.kcal)} ккал</span></div>`);
+  try {
+    const r = await gemini([{ text: `Замени блюдо «${m.name}» (${MEALS[m.type]}, ${r0(m.kcal)} ккал, Б${r0(m.protein)}) на другое домашнее блюдо с калорийностью ±10% и не меньшим белком. Цель: ${isKid(p) ? 'здоровое питание ребёнка' : GOALS[p.goal].n}. ${S.plan.prefs ? 'Пожелания: ' + S.plan.prefs + '.' : ''} Не повторяй блюда недели: ${all.join(', ')}. type оставь «${m.type}». По-русски.` }], MEAL_SCHEMA);
+    S.plan.days[d].meals[mi] = { ...r, type: m.type };
+    S.plan.eaten = (S.plan.eaten || []).filter(k => k !== eatKey(d, mi));
+    save(); toast(`🔄 ${r.name}`); openPlanMeal(d, mi); render();
+  } catch (e) { aiError(e); }
 }
 function kitchenToday(p) {
   const i = planIndex(); let h = '';
@@ -369,6 +450,10 @@ DEMO.set(PLAN_SCHEMA, { tip: 'Отвари крупу сразу на 2 дня �
     { type: 'snack', name: 'Яблоко и йогурт', kcal: 200, protein: 8, fat: 4, carbs: 30 }] })),
   shopping: [{ cat: 'Мясо и рыба', name: 'Куриное филе', qty: '1,5 кг' }, { cat: 'Овощи и фрукты', name: 'Яблоки', qty: '1 кг' }, { cat: 'Овощи и фрукты', name: 'Помидоры', qty: '6 шт' },
     { cat: 'Молочное и яйца', name: 'Яйца', qty: '20 шт' }, { cat: 'Молочное и яйца', name: 'Творог', qty: '600 г' }, { cat: 'Крупы, хлеб, макароны', name: 'Гречка', qty: '800 г' }] });
+DEMO.set(MEAL_SCHEMA, { type: 'lunch', name: 'Индейка с булгуром и овощами', kcal: 510, protein: 38, fat: 12, carbs: 55 });
+DEMO.set(MEAL_RECIPE_SCHEMA, { minutes: 35, servings: 3, tip: 'Добавь больше овощей — объём вырастет, а калорий почти не прибавится.',
+  ingredients: [{ name: 'Свёкла', qty: '2 шт', cat: 'Овощи и фрукты' }, { name: 'Филе куриное', qty: '400 г', cat: 'Мясо и рыба' }, { name: 'Капуста', qty: '300 г', cat: 'Овощи и фрукты' }, { name: 'Томаты', qty: '2 шт', cat: 'Овощи и фрукты' }],
+  steps: ['Нарежь курицу', 'Нарежь овощи', 'Туши всё вместе 20 минут', 'Подавай с зеленью'] });
 DEMO.set(REPORT_SCHEMA, { score: 7, headline: 'Хорошая неделя: белок в норме, но мало воды', wins: ['5 из 7 дней в пределах нормы калорий', '3 тренировки — отличный ритм'],
   improve: ['Вода: в среднем 1,2 л вместо 2 л', 'Ужины поздние и тяжёлые'], plan: ['Стакан воды перед каждым приёмом пищи', 'Ужин до 20:00, больше овощей', '2 прогулки по 30 минут'] });
 
@@ -400,11 +485,17 @@ document.addEventListener('click', e => {
     case 'plan-new': planForm(); break;
     case 'plan-go': planGo($('#pl-p').value.trim()); break;
     case 'plan-day': planDay = +el.dataset.v; openPlan(); break;
+    case 'plan-meal': openPlanMeal(+el.dataset.d, +el.dataset.m); break;
+    case 'pm-recipe': planMealRecipe(+el.dataset.d, +el.dataset.m); break;
+    case 'pm-swap': planMealSwap(+el.dataset.d, +el.dataset.m); break;
+    case 'pm-shop': { const r = S.plan.days[+el.dataset.d].meals[+el.dataset.m].recipe; const before = S.shop.filter(s => !s.done).length;
+      addShop(r.ingredients.map(i => ({ ...i }))); const n = S.shop.filter(s => !s.done).length - before;
+      toast(n ? `🛒 Новых продуктов в списке: ${n}` : '🛒 Всё уже в списке — количество обновлено'); break; }
     case 'plan-eat': { const d = +el.dataset.d, mi = +el.dataset.m, k = eatKey(d, mi); S.plan.eaten ??= [];
       if (S.plan.eaten.includes(k)) return toast('Уже отмечено ✓');
       const m = S.plan.days[d].meals[mi]; S.plan.eaten.push(k);
       day().meals.push({ id: uid(), type: m.type, time: hm(), name: m.name, fromPlan: true, items: [{ name: m.name, grams: 0, kcal: r0(m.kcal), protein: r0(m.protein), fat: r0(m.fat), carbs: r0(m.carbs) }] });
-      save(); addXP(10, 'По плану меню'); checkQuests(); if ($('.sheet')) openPlan(); render(); break; }
+      save(); addXP(10, 'По плану меню'); checkQuests(); if ($('#pm-body')) openPlanMeal(d, mi); else if ($('.sheet')) openPlan(); render(); break; }
     case 'shop': openShop(); break;
     case 'shop-add': { const v = $('#sh-n').value.trim(); if (!v) return; const m = v.match(/^(.*?)\s+([\d.,]+\s*\S*)$/);
       addShop([{ name: m ? m[1] : v, qty: m ? m[2] : '', cat: 'Другое' }]); openShop(); break; }
@@ -416,6 +507,7 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('input', e => { if (e.target.id === 'pg') updProduct(); });
+dedupeShop();
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
   if (e.target.id === 'sc-code') $('[data-action="bc-go"]')?.click();
