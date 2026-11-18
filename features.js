@@ -405,7 +405,7 @@ function weekSummary(p) {
   return `${p.name}, ${p.age} лет, ${p.sex === 'm' ? 'муж' : 'жен'}, ${p.weight} кг${p.targetWeight ? ', цель по весу ' + p.targetWeight + ' кг' : ''}, цель «${GOALS[p.goal].n}».
 Норма: ${t.kcal} ккал, Б${t.protein}/Ж${t.fat}/У${t.carbs}, вода ${t.water} мл.
 По дням:\n${rows.join('\n')}
-Взвешивания за неделю: ${ws.map(w => w.date + ' ' + w.kg).join(', ') || 'нет'}. ${f ? `Темп ${f.week.toFixed(2)} кг/нед (${f.method}).` : ''} Серия дней: ${streak(p)}.`;
+Взвешивания за неделю: ${ws.map(w => w.date + ' ' + w.kg).join(', ') || 'нет'}. ${f ? `Темп ${f.week.toFixed(2)} кг/нед (${f.method}).` : ''} Серия дней: ${streak(p)}. ${typeof cycleCoachLine === 'function' ? cycleCoachLine(p) : ''}`;
 }
 async function weeklyReport(force) {
   const p = P(), cached = S.reports[p.id];

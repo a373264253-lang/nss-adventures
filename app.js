@@ -2,7 +2,7 @@
 /* NSs Adventures — семейный счётчик калорий. Всё хранится на устройстве (localStorage). */
 
 const KEY = 'nss-adventures-v1';
-const VERSION = '1.4';
+const VERSION = '1.5';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const r0 = n => Math.round(+n || 0);
@@ -418,6 +418,7 @@ function todayHtml() {
   }
   h += `<div class="card"><div class="row between"><h3>💧 Вода</h3><span class="muted">${d.water} / ${t.water} мл</span></div>
     <div class="drops">${Array.from({ length: glasses }, (_, i) => `<button class="drop ${i < drunk ? 'on' : ''}" data-action="water" data-n="${i}">${i < drunk ? '' : '+'}</button>`).join('')}</div></div>`;
+  if (typeof cycleToday === 'function') h += cycleToday(p);
   if (p.modes.fasting) h += fastingCard(p);
   if (p.modes.adventure) {
     h += `<div class="card"><div class="row between"><h3>🗺️ Квесты дня</h3><span class="pill">+25 XP</span></div>
@@ -537,6 +538,7 @@ function moreHtml() {
   h += mode('adventure', '🗺️', 'var(--grad2)', 'Приключение', 'Уровни, XP, квесты дня и достижения');
   if (!isKid(p)) h += mode('fasting', '⏳', 'linear-gradient(135deg,#A78BFA,#F472B6)', 'Интервальное голодание', 'Таймер окна еды и этапы',
     m.fasting ? `<div class="seg" style="margin-top:8px">${FAST.map(f => `<button class="${(m.fastH || 16) === f.h ? 'on' : ''}" data-action="fasth" data-v="${f.h}">${f.n}</button>`).join('')}</div>` : '');
+  if (typeof cycleModeHtml === 'function') h += cycleModeHtml(p);
   h += mode('voice', '🔊', 'linear-gradient(135deg,#3DDC97,#4FC3F7)', 'Голосовой тренер', 'Озвучивает упражнения и уровни');
   h += `<div class="mode"><div class="e" style="background:linear-gradient(135deg,#FFE066,#51CF66)">🧒</div><div class="grow"><b>Детский режим</b><div class="muted">Включается сам для профилей младше 14 лет: звёзды и радуга вместо калорий</div></div></div>`;
   h += `<h2>Ещё</h2>
@@ -751,6 +753,7 @@ async function coach() {
 Человек: ${p.name}, ${p.age} лет, ${p.sex === 'm' ? 'муж' : 'жен'}, ${p.weight} кг, цель: ${isKid(p) ? 'здоровое питание ребёнка (не говори о калориях, только о еде и играх)' : GOALS[p.goal].n}.
 Сейчас ${hm()}. Норма ${t.kcal} ккал, Б${t.protein}/Ж${t.fat}/У${t.carbs}. Съедено ${r0(x.kcal)} ккал, Б${r0(x.protein)}/Ж${r0(x.fat)}/У${r0(x.carbs)}. Вода ${d.water}/${t.water} мл.
 Еда сегодня: ${d.meals.map(m => m.name).join(', ') || 'пока ничего'}. Тренировки: ${d.workouts.map(w => w.n + ' ' + w.min + 'мин').join(', ') || 'нет'}.
+${typeof cycleCoachLine === 'function' ? cycleCoachLine(p) : ''}
 Дай: что съесть дальше (конкретно), одно упражнение или активность на сегодня с длительностью, и короткую мотивацию.`;
   try { const ans = await gemini([{ text: q }]); for (const c in S.coach) if (!c.endsWith(dkey())) delete S.coach[c]; S.coach[p.id + dkey()] = ans; save(); render(); } catch (e) { render(); aiError(e); }
 }
